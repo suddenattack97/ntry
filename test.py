@@ -38,6 +38,7 @@ class LadderGameGUI:
         self.next_round = None  # 다음 회차
         self.current_prediction = None  # 현재 회차 예측 (이미 베팅한 예측)
         self.next_prediction = None  # 다음 회차 예측 (새로운 예측)
+        self.betting_start_round = None  # 베팅 시작 회차 추가
         
         # HTTP 세션 초기화
         self.session = requests.Session()
@@ -186,26 +187,36 @@ class LadderGameGUI:
         for result in self.game_results:
             round_num, direction, line, parity = result
             
-            # 모든 회차에 대해 승리 여부 확인
-            correct_count = 0
-            # 현재 예측 전략(좌3홀)과 비교
-            if direction == '좌':
-                correct_count += 1
-            if line == '3':
-                correct_count += 1
-            if parity == '홀':
-                correct_count += 1
-            
-            # 2개 이상 적중시 표시 추가
-            if correct_count >= 2:
-                result = (f"★{round_num}", direction, line, parity)
+            # 베팅 시작 회차 이후의 결과에 대해서만 승리 여부 확인
+            if self.betting_start_round and int(round_num) >= int(self.betting_start_round):
+                correct_count = 0
+                # 현재 예측 전략(좌3홀)과 비교
+                if direction == '좌':
+                    correct_count += 1
+                if line == '3':
+                    correct_count += 1
+                if parity == '홀':
+                    correct_count += 1
+                
+                # 2개 이상 적중시 표시 추가
+                if correct_count >= 2:
+                    result = (f"★{round_num}", direction, line, parity)
+                else:
+                    result = (round_num, direction, line, parity)
+            else:
+                result = (round_num, direction, line, parity)
             
             item = self.result_tree.insert('', 'end', values=result)
             
-            # 적중 결과에 따라 태그 설정
-            if correct_count >= 2:
-                self.result_tree.tag_configure('winner', foreground='blue')
-                self.result_tree.item(item, tags=('winner',))
+            # 적중 결과에 따라 태그 설정 (베팅 시작 회차 이후만)
+            if self.betting_start_round and int(round_num) >= int(self.betting_start_round):
+                correct_count = sum([
+                    1 for actual, expected in zip([direction, line, parity], ['좌', '3', '홀'])
+                    if actual == expected
+                ])
+                if correct_count >= 2:
+                    self.result_tree.tag_configure('winner', foreground='blue')
+                    self.result_tree.item(item, tags=('winner',))
 
     def update_stats(self):
         if not self.game_results:
@@ -392,6 +403,7 @@ class LadderGameGUI:
                         self.total_profit = self.current_asset - self.initial_asset  # 총수익 업데이트
                         self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
                         self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
+                        self.betting_start_round = self.next_round  # 베팅 시작 회차 설정
                         self.add_log(f"{self.next_round}회차 베팅: 방향({self.next_prediction[0]}), 줄수({self.next_prediction[1]}), 홀짝({self.next_prediction[2]}) - 각 {self.current_bet:,}원")
                     else:
                         # 이전에 예측한 다음 회차 예측을 현재 예측으로
