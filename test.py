@@ -48,6 +48,7 @@ class LadderGameGUI:
         self.total_profit = 0
         self.win_count = 0
         self.lose_count = 0
+        self.total_net_profit = 0  # 순수익 합계 추가
         
         # 베팅 모드 설정
         self.betting_mode = tk.StringVar(value="rotation")  # 기본값: 로테이션
@@ -128,6 +129,7 @@ class LadderGameGUI:
             '초기자산': ttk.Label(asset_frame, text=f"초기자산: {self.initial_asset:,}원"),
             '현재자산': ttk.Label(asset_frame, text=f"현재자산: {self.current_asset:,}원"),
             '총수익': ttk.Label(asset_frame, text=f"총수익: {self.total_profit:,}원"),
+            '순수익합계': ttk.Label(asset_frame, text=f"순수익 합계: {self.total_net_profit:,}원"),
             '승률': ttk.Label(asset_frame, text="승률: 0%"),
             '현재베팅': ttk.Label(asset_frame, text=f"단식 베팅: {self.current_bet:,}원 × 2, 조합 베팅: {self.hedge_bet:,}원")
         }
@@ -479,6 +481,10 @@ class LadderGameGUI:
         round_info.win_amount = win_amount
         round_info.profit = win_amount  # 베팅금은 이미 차감되었으므로 당첨금만 이익으로 계산
         
+        # 순수익 계산 및 업데이트
+        net_profit = win_amount - round_info.total_bet
+        self.total_net_profit += net_profit
+        
         # 자산 업데이트 (당첨금만 추가)
         self.current_asset += round_info.profit
         self.total_profit = self.current_asset - self.initial_asset
@@ -525,6 +531,7 @@ class LadderGameGUI:
         
         self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
         self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
+        self.asset_labels['순수익합계'].config(text=f"순수익 합계: {self.total_net_profit:,}원")
         self.asset_labels['승률'].config(text=f"승률: {win_rate:.1f}% ({self.win_count}승 {self.lose_count}패)")
         self.asset_labels['현재베팅'].config(text=f"단식 베팅: {self.current_bet:,}원 × 2, 조합 베팅: {self.hedge_bet:,}원")
 
