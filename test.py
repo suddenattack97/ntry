@@ -37,7 +37,7 @@ class LadderGameGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("파워사다리 게임 분석기")
-        self.root.geometry("620x810")
+        self.root.geometry("800x670")
         
         # 자산 및 베팅 정보 초기화
         self.initial_asset = 500000  # 초기 자산 50만원
@@ -48,6 +48,13 @@ class LadderGameGUI:
         self.total_profit = 0
         self.win_count = 0
         self.lose_count = 0
+        
+        # 베팅 모드 설정
+        self.betting_mode = tk.StringVar(value="rotation")  # 기본값: 로테이션
+        self.selected_picks = {
+            'pick1': tk.StringVar(value='좌'),
+            'pick2': tk.StringVar(value='3')
+        }
         
         # 배당률 설정
         self.odds = {
@@ -98,11 +105,10 @@ class LadderGameGUI:
         self.create_result_display()
         self.create_stats_display()
         self.create_prediction_display()
-        self.create_log_display()
         
         # 상태 표시 레이블
         self.status_label = ttk.Label(self.main_frame, text="마지막 업데이트: -")
-        self.status_label.grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=5, pady=5)
+        self.status_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=5)
         
         # 데이터 초기화
         self.game_results = []
@@ -137,9 +143,17 @@ class LadderGameGUI:
         result_frame = ttk.LabelFrame(self.main_frame, text="게임 결과", padding="5")
         result_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
         
+        # 왼쪽 프레임 (트리뷰용)
+        left_frame = ttk.Frame(result_frame)
+        left_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # 오른쪽 프레임 (베팅 모드와 베팅 내역용)
+        right_frame = ttk.Frame(result_frame)
+        right_frame.grid(row=0, column=1, sticky=(tk.N, tk.S), padx=10)
+        
         # 결과 표시 트리뷰
         columns = ('회차', '방향', '줄수', '홀짝')
-        self.result_tree = ttk.Treeview(result_frame, columns=columns, show='headings', height=15)
+        self.result_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
         
         # 컬럼 설정
         for col in columns:
@@ -151,12 +165,51 @@ class LadderGameGUI:
         style.configure("Winner.Treeview.Row", background="lightgreen")
         
         # 스크롤바
-        scrollbar = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.result_tree.yview)
+        scrollbar = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.result_tree.yview)
         self.result_tree.configure(yscrollcommand=scrollbar.set)
         
-        # 배치
+        # 트리뷰 배치
         self.result_tree.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        
+        # 베팅 모드 선택 프레임
+        mode_frame = ttk.LabelFrame(right_frame, text="베팅 모드", padding="5")
+        mode_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=5, pady=5)
+        
+        # 라디오 버튼
+        ttk.Radiobutton(mode_frame, text="로테이션", variable=self.betting_mode, 
+                       value="rotation").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Radiobutton(mode_frame, text="선택", variable=self.betting_mode, 
+                       value="custom").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        
+        # 선택 모드 콤보박스 프레임
+        combo_frame = ttk.LabelFrame(right_frame, text="선택 설정", padding="5")
+        combo_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=5, pady=5)
+        
+        # 첫번째 픽 선택
+        ttk.Label(combo_frame, text="첫번째 픽:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Combobox(combo_frame, textvariable=self.selected_picks['pick1'], 
+                    values=['좌', '우', '3', '4', '홀', '짝'], 
+                    state='readonly', width=5).grid(row=0, column=1, padx=5)
+        
+        # 두번째 픽 선택
+        ttk.Label(combo_frame, text="두번째 픽:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Combobox(combo_frame, textvariable=self.selected_picks['pick2'], 
+                    values=['좌', '우', '3', '4', '홀', '짝'], 
+                    state='readonly', width=5).grid(row=1, column=1, padx=5)
+        
+        # 베팅 내역 프레임
+        log_frame = ttk.LabelFrame(right_frame, text="베팅 내역", padding="5")
+        log_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
+        
+        # 베팅 내역 텍스트 위젯
+        self.log_text = tk.Text(log_frame, height=8, width=40)
+        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # 베팅 내역 스크롤바
+        log_scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
+        log_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.log_text.configure(yscrollcommand=log_scrollbar.set)
 
     def create_stats_display(self):
         # 통계 표시 프레임
@@ -194,20 +247,6 @@ class LadderGameGUI:
             label.grid(row=row, column=0, sticky=tk.W, padx=5, pady=2)
             row += 1
 
-    def create_log_display(self):
-        # 로그 표시 프레임
-        log_frame = ttk.LabelFrame(self.main_frame, text="베팅 내역", padding="5")
-        log_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
-        
-        # 로그 표시 텍스트 위젯
-        self.log_text = tk.Text(log_frame, height=8, width=80)
-        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # 스크롤바
-        scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
-        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        self.log_text.configure(yscrollcommand=scrollbar.set)
-
     def add_log(self, message):
         current_time = datetime.now().strftime("%H:%M:%S")
         self.log_text.insert('1.0', f"[{current_time}] {message}\n")
@@ -224,17 +263,8 @@ class LadderGameGUI:
             
             # 베팅 시작 회차 이후의 결과에 대해서만 승리 여부 확인
             if self.betting_start_round and int(round_num) >= int(self.betting_start_round):
-                correct_count = 0
-                # 현재 예측 전략(좌3홀)과 비교
-                if direction == '좌':
-                    correct_count += 1
-                if line == '3':
-                    correct_count += 1
-                if parity == '홀':
-                    correct_count += 1
-                
-                # 2개 이상 적중시 표시 추가
-                if correct_count >= 2:
+                round_info = self.rounds.get(round_num)
+                if round_info and round_info.correct_picks >= 2:  # 단식 2개 이상 맞았을 때만
                     result = (f"★{round_num}", direction, line, parity)
                 else:
                     result = (round_num, direction, line, parity)
@@ -245,11 +275,8 @@ class LadderGameGUI:
             
             # 적중 결과에 따라 태그 설정 (베팅 시작 회차 이후만)
             if self.betting_start_round and int(round_num) >= int(self.betting_start_round):
-                correct_count = sum([
-                    1 for actual, expected in zip([direction, line, parity], ['좌', '3', '홀'])
-                    if actual == expected
-                ])
-                if correct_count >= 2:
+                round_info = self.rounds.get(round_num)
+                if round_info and round_info.correct_picks >= 2:  # 단식 2개 이상 맞았을 때만
                     self.result_tree.tag_configure('winner', foreground='blue')
                     self.result_tree.item(item, tags=('winner',))
 
@@ -282,25 +309,42 @@ class LadderGameGUI:
                  f"짝 {even_count}회 ({even_count/len(recent_results)*100:.1f}%)")
 
     def update_prediction(self):
-        # 현재 베팅 패턴 가져오기
-        pattern_type, pick1, pick2 = self.betting_patterns[self.current_pattern_index]
+        mode = self.betting_mode.get()
         
-        # 다음 패턴 인덱스 계산 (3단계 로테이션)
-        self.current_pattern_index = (self.current_pattern_index + 1) % 3
-        
-        # 단식 예측 (2픽)
-        if pattern_type == 'direction_parity':
-            predicted_direction = pick1  # 좌
-            predicted_line = None
-            predicted_parity = pick2    # 홀
-        elif pattern_type == 'direction_line':
-            predicted_direction = pick1  # 좌
-            predicted_line = pick2      # 3
-            predicted_parity = None
-        else:  # line_parity
-            predicted_direction = None
-            predicted_line = pick1      # 3
-            predicted_parity = pick2    # 홀
+        if mode == "rotation":  # 로테이션 모드
+            pattern_type, pick1, pick2 = self.betting_patterns[self.current_pattern_index]
+            self.current_pattern_index = (self.current_pattern_index + 1) % 3
+            
+            if pattern_type == 'direction_parity':
+                predicted_direction = pick1  # 좌
+                predicted_line = None
+                predicted_parity = pick2    # 홀
+            elif pattern_type == 'direction_line':
+                predicted_direction = pick1  # 좌
+                predicted_line = pick2      # 3
+                predicted_parity = None
+            else:  # line_parity
+                predicted_direction = None
+                predicted_line = pick1      # 3
+                predicted_parity = pick2    # 홀
+            
+        else:  # 선택 모드
+            pick1 = self.selected_picks['pick1'].get()
+            pick2 = self.selected_picks['pick2'].get()
+            
+            # 선택된 값에 따라 예측값 설정
+            predicted_direction = pick1 if pick1 in ['좌', '우'] else None
+            predicted_line = pick1 if pick1 in ['3', '4'] else None
+            predicted_parity = pick1 if pick1 in ['홀', '짝'] else None
+            
+            if predicted_direction is None:
+                predicted_direction = pick2 if pick2 in ['좌', '우'] else None
+            if predicted_line is None:
+                predicted_line = pick2 if pick2 in ['3', '4'] else None
+            if predicted_parity is None:
+                predicted_parity = pick2 if pick2 in ['홀', '짝'] else None
+            
+            pattern_type = "custom"
         
         # 헤지 베팅 예측 (우+4줄)
         hedge_direction = '우'
