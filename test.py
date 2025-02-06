@@ -37,7 +37,7 @@ class LadderGameGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("파워사다리 게임 분석기")
-        self.root.geometry("800x670")
+        self.root.geometry("850x670")
         
         # 자산 및 베팅 정보 초기화
         self.initial_asset = 500000  # 초기 자산 50만원
@@ -152,13 +152,16 @@ class LadderGameGUI:
         right_frame.grid(row=0, column=1, sticky=(tk.N, tk.S), padx=10)
         
         # 결과 표시 트리뷰
-        columns = ('회차', '방향', '줄수', '홀짝')
+        columns = ('회차', '방향', '줄수', '홀짝', '베팅금', '순이익')
         self.result_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
         
         # 컬럼 설정
         for col in columns:
             self.result_tree.heading(col, text=col)
-            self.result_tree.column(col, width=100, anchor='center')
+            if col in ['베팅금', '순이익']:
+                self.result_tree.column(col, width=80, anchor='center')
+            else:
+                self.result_tree.column(col, width=70, anchor='center')
         
         # 트리뷰 스타일 설정
         style = ttk.Style()
@@ -264,21 +267,40 @@ class LadderGameGUI:
             # 베팅 시작 회차 이후의 결과에 대해서만 승리 여부 확인
             if self.betting_start_round and int(round_num) >= int(self.betting_start_round):
                 round_info = self.rounds.get(round_num)
-                if round_info and round_info.correct_picks >= 2:  # 단식 2개 이상 맞았을 때만
-                    result = (f"★{round_num}", direction, line, parity)
+                if round_info:
+                    # 총 베팅금과 당첨금을 비교하여 실제 이익이 있는지 확인
+                    total_win = round_info.win_amount
+                    total_bet = round_info.total_bet
+                    net_profit = total_win - total_bet
+                    
+                    if net_profit > 0:  # 실제 이익이 있을 때만 별표시
+                        result = (f"★{round_num}", direction, line, parity, 
+                                f"{total_bet:,}", f"+{net_profit:,}")
+                    else:
+                        result = (round_num, direction, line, parity, 
+                                f"{total_bet:,}", f"{net_profit:,}")
                 else:
-                    result = (round_num, direction, line, parity)
+                    result = (round_num, direction, line, parity, "-", "-")
             else:
-                result = (round_num, direction, line, parity)
+                result = (round_num, direction, line, parity, "-", "-")
             
             item = self.result_tree.insert('', 'end', values=result)
             
             # 적중 결과에 따라 태그 설정 (베팅 시작 회차 이후만)
             if self.betting_start_round and int(round_num) >= int(self.betting_start_round):
                 round_info = self.rounds.get(round_num)
-                if round_info and round_info.correct_picks >= 2:  # 단식 2개 이상 맞았을 때만
-                    self.result_tree.tag_configure('winner', foreground='blue')
-                    self.result_tree.item(item, tags=('winner',))
+                if round_info:
+                    # 총 베팅금과 당첨금을 비교하여 실제 이익이 있는지 확인
+                    total_win = round_info.win_amount
+                    total_bet = round_info.total_bet
+                    net_profit = total_win - total_bet
+                    
+                    if net_profit > 0:  # 실제 이익이 있을 때만 파란색 표시
+                        self.result_tree.tag_configure('winner', foreground='blue')
+                        self.result_tree.item(item, tags=('winner',))
+                    elif net_profit < 0:  # 손실일 때는 빨간색 표시
+                        self.result_tree.tag_configure('loser', foreground='red')
+                        self.result_tree.item(item, tags=('loser',))
 
     def update_stats(self):
         if not self.game_results:
