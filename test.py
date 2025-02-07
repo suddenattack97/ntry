@@ -926,8 +926,23 @@ class LadderGameGUI:
             remaining_minutes = remaining_time // 60
             remaining_seconds = remaining_time % 60
             
-            # 타이머 레이블 업데이트
-            self.timer_label.config(text=f"남은 시간: {remaining_minutes:02d}분 {remaining_seconds:02d}초")
+            # 시간에 따른 색상 설정
+            if remaining_minutes >= 4:
+                color = '#228B22'  # 파록색 (Forest Green)
+            elif remaining_minutes >= 3:
+                color = '#00BFFF'  # 하늘색 (Deep Sky Blue)
+            elif remaining_minutes >= 2:
+                color = '#DAA520'  # 어두운 노란색 (Goldenrod)
+            elif remaining_minutes >= 1:
+                color = '#FF8C00'  # 어두운 주황색 (Dark Orange)
+            else:
+                color = '#FF0000'  # 빨간색 (Red)
+            
+            # 타이머 레이블 업데이트 (색상 포함)
+            self.timer_label.config(
+                text=f"남은 시간: {remaining_minutes:02d}분 {remaining_seconds:02d}초",
+                foreground=color
+            )
         except Exception as e:
             logging.error(f"타이머 업데이트 중 오류 발생: {e}")
         finally:
