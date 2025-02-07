@@ -7,6 +7,7 @@ import time
 import logging
 from datetime import datetime
 import random  # 랜덤 모듈 추가
+from timer import get_timer_remaining_time  # 타이머 임포트
 
 # 로깅 설정
 logging.basicConfig(
@@ -165,21 +166,36 @@ class LadderGameGUI:
         asset_frame = ttk.LabelFrame(self.main_frame, text="내 정보", padding="5")
         asset_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5, pady=5)
         
-        # 자산 정보 레이블
+        # 왼쪽 프레임 (자산 정보용)
+        left_frame = ttk.Frame(asset_frame)
+        left_frame.grid(row=0, column=0, sticky=(tk.W, tk.N, tk.S))
+        
+        # 오른쪽 프레임 (타이머용)
+        right_frame = ttk.Frame(asset_frame)
+        right_frame.grid(row=0, column=1, sticky=(tk.E, tk.N, tk.S))
+        
+        # 자산 정보 레이블 (왼쪽)
         self.asset_labels = {
-            '초기자산': ttk.Label(asset_frame, text=f"초기자산: {self.initial_asset:,}원"),
-            '현재자산': ttk.Label(asset_frame, text=f"현재자산: {self.current_asset:,}원"),
-            '총수익': ttk.Label(asset_frame, text=f"총수익: {self.total_profit:,}원"),
-            '순수익합계': ttk.Label(asset_frame, text=f"순수익 합계: {self.total_net_profit:,}원"),
-            '승률': ttk.Label(asset_frame, text="승률: 0%"),
-            '현재베팅': ttk.Label(asset_frame, text="현재베팅: -")
+            '초기자산': ttk.Label(left_frame, text=f"초기자산: {self.initial_asset:,}원"),
+            '현재자산': ttk.Label(left_frame, text=f"현재자산: {self.current_asset:,}원"),
+            '총수익': ttk.Label(left_frame, text=f"총수익: {self.total_profit:,}원"),
+            '순수익합계': ttk.Label(left_frame, text=f"순수익 합계: {self.total_net_profit:,}원"),
+            '승률': ttk.Label(left_frame, text="승률: 0%"),
+            '현재베팅': ttk.Label(left_frame, text="현재베팅: -")
         }
         
-        # 배치
+        # 타이머 레이블 (오른쪽)
+        self.timer_label = ttk.Label(right_frame, text="남은 시간: --분 --초", font=('Arial', 12, 'bold'))
+        self.timer_label.grid(row=0, column=0, padx=10, pady=5)
+        
+        # 배치 (왼쪽 프레임)
         row = 0
         for label in self.asset_labels.values():
             label.grid(row=row, column=0, sticky=tk.W, padx=5, pady=2)
             row += 1
+        
+        # 타이머 업데이트 시작
+        self.update_timer()
 
     def create_result_display(self):
         # 결과 표시 프레임
@@ -896,6 +912,27 @@ class LadderGameGUI:
                 self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
                 self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
                 self.asset_labels['순수익합계'].config(text=f"순수익 합계: {self.total_net_profit:,}원")
+
+    def update_timer(self):
+        """타이머 업데이트 함수"""
+        try:
+            # 타이머 계산
+            current_time = datetime.now()
+            cycle_seconds = 5 * 60  # 5분
+            elapsed_seconds = (current_time.minute * 60 + current_time.second + 29) % cycle_seconds  # 29초 오프셋 적용
+            remaining_time = cycle_seconds - elapsed_seconds
+            
+            # 남은 시간을 분과 초로 변환
+            remaining_minutes = remaining_time // 60
+            remaining_seconds = remaining_time % 60
+            
+            # 타이머 레이블 업데이트
+            self.timer_label.config(text=f"남은 시간: {remaining_minutes:02d}분 {remaining_seconds:02d}초")
+        except Exception as e:
+            logging.error(f"타이머 업데이트 중 오류 발생: {e}")
+        finally:
+            # 1초마다 업데이트
+            self.root.after(1000, self.update_timer)
 
 if __name__ == "__main__":
     root = tk.Tk()
