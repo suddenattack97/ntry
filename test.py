@@ -371,8 +371,8 @@ class LadderGameGUI:
         if not self.game_results:
             return
         
-        # 최근 20개 결과만 사용
-        recent_results = self.game_results[:20]
+        # 전체 결과 사용
+        recent_results = self.game_results
         
         # 좌우 비율
         left_count = sum(1 for _, dir, _, _ in recent_results if dir == '좌')
@@ -403,6 +403,11 @@ class LadderGameGUI:
         # 현재 베팅 정보 업데이트
         if method == 'method5':  # 시스템 마틴
             current_bet = method_config['martin_steps'][method_config['current_step']]
+            total_bet = current_bet * 3  # 총 베팅액 계산
+            self.current_asset -= total_bet  # 베팅액 차감
+            self.total_profit = self.current_asset - self.initial_asset
+            self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
+            self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
             self.asset_labels['현재베팅'].config(text=f"단식 베팅: {current_bet:,}원 × 3 (마틴 {method_config['current_step'] + 1}단계)")
         elif method == 'method1':
             self.asset_labels['현재베팅'].config(text=f"단식 베팅: {method_config['single_bet']:,}원 × 3, 조합 베팅: {method_config['hedge_bet']:,}원")
@@ -413,8 +418,10 @@ class LadderGameGUI:
                 self.asset_labels['현재베팅'].config(text=f"기본픽: {method_config['single_bet']:,}원 × 2, 찬스픽: {method_config['chance_bet']:,}원, 조합: {method_config['hedge_bet']:,}원")
             else:
                 self.asset_labels['현재베팅'].config(text=f"기본픽: {method_config['single_bet']:,}원 × 2, 조합: {method_config['hedge_bet']:,}원")
-        else:  # method4
+        elif method == 'method4':
             self.asset_labels['현재베팅'].config(text=f"단식: {method_config['single_bet']:,}원 × 3, 조합1: {method_config['hedge_bet1']:,}원, 조합2: {method_config['hedge_bet2']:,}원")
+        elif method == 'method5':
+            self.asset_labels['현재베팅'].config(text=f"단식 베팅: {method_config['base_bet']:,}원 × 3 (마틴 {method_config['current_step'] + 1}단계)")
         
         if mode == "rotation":  # 로테이션 모드
             pattern_type, predicted_direction, predicted_line, predicted_parity = self.betting_patterns[self.current_pattern_index]
@@ -484,6 +491,8 @@ class LadderGameGUI:
                 
                 self.add_log(f"=== {self.next_round}회차 베팅 시작 ===")
                 self.add_log(f"{self.next_round}회차 단식베팅: {' + '.join(single_bets)} - 각 {current_bet:,}원 (마틴 {method_config['current_step'] + 1}단계)")
+                if method != 'method5':  # 시스템 마틴이 아닐 때만 조합 베팅 출력
+                    self.add_log(f"{self.next_round}회차 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
 
             elif method == 'method1':
                 single_bet = method_config['single_bet']
@@ -584,7 +593,7 @@ class LadderGameGUI:
                     'result': '적중',
                     'bet_amount': bet_amount,
                     'win_amount': pick_win_amount,
-                    'profit': pick_win_amount  # 베팅금은 이미 차감되었으므로 당첨금만 이익으로 계산
+                    'profit': pick_win_amount - bet_amount
                 })
             else:
                 pick_results.append({
@@ -593,68 +602,30 @@ class LadderGameGUI:
                     'result': '미적중',
                     'bet_amount': bet_amount,
                     'win_amount': 0,
-                    'profit': 0  # 베팅금은 이미 차감되었으므로 0으로 설정
+                    'profit': -bet_amount
                 })
-        
-        # 헤지 베팅 결과 확인
-        hedge_result = None
-        method = self.betting_method.get()
-        
-        if round_info.bets['combo']:
-            hedge_direction, hedge_line, hedge_amount = round_info.bets['combo']
-            hedge_win = (actual_direction == hedge_direction and actual_line == hedge_line)
-            if hedge_win:
-                hedge_win_amount = hedge_amount * self.odds['combination']
-                win_amount += hedge_win_amount
-                hedge_result = {
-                    'result': '적중',
-                    'bet_amount': hedge_amount,
-                    'win_amount': hedge_win_amount,
-                    'profit': hedge_win_amount
-                }
-            else:
-                hedge_result = {
-                    'result': '미적중',
-                    'bet_amount': hedge_amount,
-                    'win_amount': 0,
-                    'profit': 0
-                }
-        
-        # 다중 조합 결과 확인 (method4)
-        hedge_result2 = None
-        if method == 'method4' and round_info.bets.get('combo2'):
-            hedge_direction2, _, hedge_parity, hedge_amount2 = round_info.bets['combo2']
-            hedge_win2 = (actual_direction == hedge_direction2 and actual_parity == hedge_parity)
-            if hedge_win2:
-                hedge_win_amount2 = hedge_amount2 * self.odds['combination']
-                win_amount += hedge_win_amount2
-                hedge_result2 = {
-                    'result': '적중',
-                    'bet_amount': hedge_amount2,
-                    'win_amount': hedge_win_amount2,
-                    'profit': hedge_win_amount2
-                }
-            else:
-                hedge_result2 = {
-                    'result': '미적중',
-                    'bet_amount': hedge_amount2,
-                    'win_amount': 0,
-                    'profit': 0
-                }
         
         # 결과 정보 업데이트
         round_info.correct_picks = correct_picks
         round_info.total_picks = total_picks
         round_info.win_amount = win_amount
-        round_info.profit = win_amount  # 베팅금은 이미 차감되었으므로 당첨금만 이익으로 계산
+        round_info.profit = win_amount - round_info.total_bet
         
         # 순수익 계산 및 업데이트
         net_profit = win_amount - round_info.total_bet
         self.total_net_profit += net_profit
         
-        # 자산 업데이트 (당첨금만 추가)
-        self.current_asset += round_info.profit
+        # 자산 업데이트
+        next_round_info = self.rounds.get(self.next_round)
+        current_bet = next_round_info.total_bet if next_round_info else 0
+        
+        # 현재 자산 = 초기자산 + 누적 순수익 - 현재 베팅금
+        self.current_asset = self.initial_asset + self.total_net_profit - current_bet
+        # 총수익 = 현재자산 - 초기자산
         self.total_profit = self.current_asset - self.initial_asset
+        
+        # 현재 베팅 방법 가져오기
+        method = self.betting_method.get()
         
         # 승패 기록 및 마틴 단계 조정
         if method == 'method5':  # 시스템 마틴
@@ -667,20 +638,18 @@ class LadderGameGUI:
                 # 패배시 마틴 단계 증가 (최대 9단계, 0-based index)
                 self.betting_methods[method]['current_step'] = min(9, self.betting_methods[method]['current_step'] + 1)
         else:
-            if (total_picks == 2 and correct_picks == 2) or (hedge_result and hedge_result['result'] == '적중'):
+            if correct_picks >= 2:  # 2개 이상 맞추면 승리
                 self.win_count += 1
-                self.current_bet = self.base_bet
             else:
                 self.lose_count += 1
-                self.current_bet = self.base_bet
         
         # 결과 로깅
         pattern_desc = {
             'pattern1': '좌+3+홀',
             'pattern2': '좌+3+짝',
             'pattern3': '좌+4+홀',
-            'custom': '선택모드'  # 선택 모드일 때의 패턴 설명 추가
-        }.get(round_info.pattern_type, '알 수 없음')  # 패턴을 찾지 못할 경우 '알 수 없음' 반환
+            'custom': '선택모드'
+        }.get(round_info.pattern_type, '알 수 없음')
         
         # 상세 결과 로그 생성
         self.add_log(f"\n{round_num}회차 결과 [{pattern_desc}]")
@@ -692,13 +661,7 @@ class LadderGameGUI:
                         f"(베팅: {pick['bet_amount']:,}원, "
                         f"당첨: {pick['win_amount']:,}원)")
         
-        # 헤지 베팅 결과
-        if hedge_result:
-            self.add_log(f"- 헤지(우+4줄): {hedge_result['result']} "
-                        f"(베팅: {hedge_result['bet_amount']:,}원, "
-                        f"당첨: {hedge_result['win_amount']:,}원)")
-        
-        # 최종 결과 (당첨금만 표시)
+        # 최종 결과
         self.add_log(f"=== 최종 결과: 당첨금 {round_info.win_amount:,}원 "
                     f"(단식 {correct_picks}/{total_picks}개 적중) ===\n")
         
@@ -786,8 +749,6 @@ class LadderGameGUI:
                     
                     # 게임 결과 업데이트
                     self.game_results.insert(0, new_result)
-                    if len(self.game_results) > 20:
-                        self.game_results = self.game_results[:20]
                     
                     self.update_result_tree()
                     self.update_stats()
@@ -800,7 +761,10 @@ class LadderGameGUI:
                     method = self.betting_method.get()
                     method_config = self.betting_methods[method]
                     
-                    if method == 'method1':
+                    if method == 'method5':  # 시스템 마틴
+                        current_bet = method_config['martin_steps'][method_config['current_step']]
+                        total_bet = current_bet * 3  # 총 베팅액 계산
+                    elif method == 'method1':
                         total_bet = (method_config['single_bet'] * 3) + method_config['hedge_bet']
                     elif method == 'method2':
                         total_bet = method_config['single_bet_a'] + (method_config['single_bet_bc'] * 2) + method_config['hedge_bet']
@@ -811,41 +775,15 @@ class LadderGameGUI:
                     else:  # method4
                         total_bet = (method_config['single_bet'] * 3) + method_config['hedge_bet1'] + method_config['hedge_bet2']
                     
-                    self.current_asset -= total_bet
+                    # 현재 자산 = 초기자산 + 누적 순수익 - 현재 베팅금
+                    self.current_asset = self.initial_asset + self.total_net_profit - total_bet
+                    # 총수익 = 현재자산 - 초기자산
                     self.total_profit = self.current_asset - self.initial_asset
                     
                     # 자산 정보 업데이트
                     self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
                     self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
-                    
-                    # 베팅 내역 로그
-                    single_bets = []
-                    if self.next_prediction[0]:  # direction
-                        single_bets.append(f"방향({self.next_prediction[0]})")
-                    if self.next_prediction[1]:  # line
-                        single_bets.append(f"줄수({self.next_prediction[1]})")
-                    if self.next_prediction[2]:  # parity
-                        single_bets.append(f"홀짝({self.next_prediction[2]})")
-                    
-                    self.add_log(f"=== {self.next_round}회차 베팅 시작 ===")
-                    
-                    # 베팅 방법에 따른 로그 출력
-                    if method == 'method1':
-                        self.add_log(f"{self.next_round}회차 단식베팅: {' + '.join(single_bets)} - 각 {method_config['single_bet']:,}원")
-                        self.add_log(f"{self.next_round}회차 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
-                    elif method == 'method2':
-                        self.add_log(f"{self.next_round}회차 단식베팅(주력): {single_bets[0]} - {method_config['single_bet_a']:,}원")
-                        self.add_log(f"{self.next_round}회차 단식베팅(일반): {' + '.join(single_bets[1:])} - 각 {method_config['single_bet_bc']:,}원")
-                        self.add_log(f"{self.next_round}회차 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
-                    elif method == 'method3':
-                        self.add_log(f"{self.next_round}회차 기본베팅: {' + '.join(single_bets[:2])} - 각 {method_config['single_bet']:,}원")
-                        if len(single_bets) > 2:
-                            self.add_log(f"{self.next_round}회차 찬스베팅: {single_bets[2]} - {method_config['chance_bet']:,}원")
-                        self.add_log(f"{self.next_round}회차 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
-                    else:  # method4
-                        self.add_log(f"{self.next_round}회차 단식베팅: {' + '.join(single_bets)} - 각 {method_config['single_bet']:,}원")
-                        self.add_log(f"{self.next_round}회차 조합1: 우+4줄 - {method_config['hedge_bet1']:,}원")
-                        self.add_log(f"{self.next_round}회차 조합2: 우+짝 - {method_config['hedge_bet2']:,}원")
+                    self.asset_labels['순수익합계'].config(text=f"순수익 합계: {self.total_net_profit:,}원")
                 
                 # 새로운 회차 데이터 처리
                 elif self.current_round != round_num:
@@ -861,8 +799,6 @@ class LadderGameGUI:
                     
                     # 게임 결과 업데이트
                     self.game_results.insert(0, new_result)
-                    if len(self.game_results) > 20:
-                        self.game_results = self.game_results[:20]
                     
                     self.update_result_tree()
                     self.update_stats()
@@ -876,7 +812,10 @@ class LadderGameGUI:
                     method = self.betting_method.get()
                     method_config = self.betting_methods[method]
                     
-                    if method == 'method1':
+                    if method == 'method5':  # 시스템 마틴
+                        current_bet = method_config['martin_steps'][method_config['current_step']]
+                        total_bet = current_bet * 3  # 총 베팅액 계산
+                    elif method == 'method1':
                         total_bet = (method_config['single_bet'] * 3) + method_config['hedge_bet']
                     elif method == 'method2':
                         total_bet = method_config['single_bet_a'] + (method_config['single_bet_bc'] * 2) + method_config['hedge_bet']
@@ -887,24 +826,15 @@ class LadderGameGUI:
                     else:  # method4
                         total_bet = (method_config['single_bet'] * 3) + method_config['hedge_bet1'] + method_config['hedge_bet2']
                     
-                    self.current_asset -= total_bet
+                    # 현재 자산 = 초기자산 + 누적 순수익 - 현재 베팅금
+                    self.current_asset = self.initial_asset + self.total_net_profit - total_bet
+                    # 총수익 = 현재자산 - 초기자산
                     self.total_profit = self.current_asset - self.initial_asset
                     
                     # 자산 정보 업데이트
                     self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
                     self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
-                    
-                    # 베팅 내역 로그
-                    single_bets = []
-                    if self.next_prediction[0]:  # direction
-                        single_bets.append(f"방향({self.next_prediction[0]})")
-                    if self.next_prediction[1]:  # line
-                        single_bets.append(f"줄수({self.next_prediction[1]})")
-                    if self.next_prediction[2]:  # parity
-                        single_bets.append(f"홀짝({self.next_prediction[2]})")
-                    
-                    self.add_log(f"{self.next_round}회차 단식베팅: {' + '.join(single_bets)} - 각 {method_config['single_bet']:,}원")
-                    self.add_log(f"{self.next_round}회차 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
+                    self.asset_labels['순수익합계'].config(text=f"순수익 합계: {self.total_net_profit:,}원")
                 
                 current_time = datetime.now().strftime("%H:%M:%S")
                 self.status_label.config(text=f"마지막 업데이트: {current_time} (회차: {round_num})")
@@ -928,42 +858,24 @@ class LadderGameGUI:
         method = self.betting_method.get()
         method_config = self.betting_methods[method]
         
-        # 현재 베팅 정보 업데이트
-        if method == 'method5':  # 시스템 마틴
-            current_bet = method_config['martin_steps'][method_config['current_step']]
-            self.asset_labels['현재베팅'].config(text=f"단식 베팅: {current_bet:,}원 × 3 (마틴 {method_config['current_step'] + 1}단계)")
-        elif method == 'method1':
-            self.asset_labels['현재베팅'].config(text=f"단식 베팅: {method_config['single_bet']:,}원 × 3, 조합 베팅: {method_config['hedge_bet']:,}원")
-        elif method == 'method2':
-            self.asset_labels['현재베팅'].config(text=f"주력픽: {method_config['single_bet_a']:,}원, 일반픽: {method_config['single_bet_bc']:,}원 × 2, 조합: {method_config['hedge_bet']:,}원")
-        elif method == 'method3':
-            if self.selected_picks['pick3'].get() != '없음':
-                self.asset_labels['현재베팅'].config(text=f"기본픽: {method_config['single_bet']:,}원 × 2, 찬스픽: {method_config['chance_bet']:,}원, 조합: {method_config['hedge_bet']:,}원")
-            else:
-                self.asset_labels['현재베팅'].config(text=f"기본픽: {method_config['single_bet']:,}원 × 2, 조합: {method_config['hedge_bet']:,}원")
-        elif method == 'method4':
-            self.asset_labels['현재베팅'].config(text=f"단식: {method_config['single_bet']:,}원 × 3, 조합1: {method_config['hedge_bet1']:,}원, 조합2: {method_config['hedge_bet2']:,}원")
-        elif method == 'method5':
-            self.asset_labels['현재베팅'].config(text=f"단식 베팅: {method_config['base_bet']:,}원 × 3 (마틴 {method_config['current_step'] + 1}단계)")
-
         # 다음 회차 베팅이 이미 있고, 결과가 아직 안 나왔다면 베팅 업데이트
         if self.next_round and self.next_prediction:
             # 이전 베팅 금액 환불
             if self.next_round in self.rounds:
                 old_round_info = self.rounds[self.next_round]
-                self.current_asset += old_round_info.total_bet
-                
                 # 베팅 내역 로그에 이전 베팅 취소 기록
                 self.add_log(f"\n{self.next_round}회차 이전 베팅 취소")
                 self.add_log(f"- 환불 금액: {old_round_info.total_bet:,}원")
+                
+                # 이전 베팅 정보 삭제
+                del self.rounds[self.next_round]
             
             # 새로운 예측 및 베팅 정보 업데이트
             self.update_prediction()
             
-            # 새 베팅 금액 차감
+            # 새 베팅 정보 기록
             if self.next_round in self.rounds:
                 new_round_info = self.rounds[self.next_round]
-                self.current_asset -= new_round_info.total_bet
                 
                 # 베팅 내역 로그에 새 베팅 기록
                 self.add_log(f"\n{self.next_round}회차 베팅 방식 변경")
@@ -977,36 +889,13 @@ class LadderGameGUI:
                     if self.next_prediction[2]:  # parity
                         single_bets.append(f"홀짝({self.next_prediction[2]})")
                     self.add_log(f"- 단식베팅: {' + '.join(single_bets)} - 각 {current_bet:,}원 (마틴 {method_config['current_step'] + 1}단계)")
-                else:
-                    single_bets = []
-                    if self.next_prediction[0]:  # direction
-                        single_bets.append(f"방향({self.next_prediction[0]})")
-                    if self.next_prediction[1]:  # line
-                        single_bets.append(f"줄수({self.next_prediction[1]})")
-                    if self.next_prediction[2]:  # parity
-                        single_bets.append(f"홀짝({self.next_prediction[2]})")
-                    
-                    if method == 'method1':
-                        self.add_log(f"- 단식베팅: {' + '.join(single_bets)} - 각 {method_config['single_bet']:,}원")
-                        self.add_log(f"- 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
-                    elif method == 'method2':
-                        self.add_log(f"- 단식베팅(주력): {single_bets[0]} - {method_config['single_bet_a']:,}원")
-                        self.add_log(f"- 단식베팅(일반): {' + '.join(single_bets[1:])} - 각 {method_config['single_bet_bc']:,}원")
-                        self.add_log(f"- 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
-                    elif method == 'method3':
-                        self.add_log(f"- 기본베팅: {' + '.join(single_bets[:2])} - 각 {method_config['single_bet']:,}원")
-                        if len(single_bets) > 2:
-                            self.add_log(f"- 찬스베팅: {single_bets[2]} - {method_config['chance_bet']:,}원")
-                        self.add_log(f"- 조합베팅: 우+4줄 - {method_config['hedge_bet']:,}원")
-                    else:  # method4
-                        self.add_log(f"- 단식베팅: {' + '.join(single_bets)} - 각 {method_config['single_bet']:,}원")
-                        self.add_log(f"- 조합1: 우+4줄 - {method_config['hedge_bet1']:,}원")
-                        self.add_log(f"- 조합2: 우+짝 - {method_config['hedge_bet2']:,}원")
                 
-                # 자산 정보 업데이트
+                # 자산 정보 업데이트 (초기자산 + 누적 순수익 - 현재 베팅금)
+                self.current_asset = self.initial_asset + self.total_net_profit - new_round_info.total_bet
                 self.total_profit = self.current_asset - self.initial_asset
                 self.asset_labels['현재자산'].config(text=f"현재자산: {self.current_asset:,}원")
                 self.asset_labels['총수익'].config(text=f"총수익: {self.total_profit:,}원")
+                self.asset_labels['순수익합계'].config(text=f"순수익 합계: {self.total_net_profit:,}원")
 
 if __name__ == "__main__":
     root = tk.Tk()
