@@ -5,9 +5,10 @@ from bs4 import BeautifulSoup
 import threading
 import time
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 import random  # 랜덤 모듈 추가
 from timer import get_timer_remaining_time  # 타이머 임포트
+import os
 
 # 로깅 설정
 logging.basicConfig(
@@ -60,6 +61,33 @@ class LadderGameGUI:
             'pick3': tk.StringVar(value='홀')
         }
         
+        # 로그 파일 경로 설정
+        self.log_directory = 'betting_logs'
+        if not os.path.exists(self.log_directory):
+            os.makedirs(self.log_directory)
+        self.current_log_file = None
+        self.update_log_file()
+        
+        # 메인 프레임
+        self.main_frame = ttk.Frame(root, padding="10")
+        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # GUI 컴포넌트 초기화
+        self.create_asset_display()
+        self.create_result_display()
+        self.create_stats_display()
+        self.create_prediction_display()
+        
+        # 상태 표시 레이블
+        self.status_label = ttk.Label(self.main_frame, text="마지막 업데이트: -")
+        self.status_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=5)
+        
+        # 프로그램 시작 로그 기록
+        self.add_log("=== 프로그램 시작 ===")
+        
+        # 프로그램 종료 시 이벤트 바인딩
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         # 배당률 설정
         self.odds = {
             'single': 1.93,  # 단식 배당 (좌우/홀짝/3줄4줄)
@@ -99,20 +127,6 @@ class LadderGameGUI:
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1'
         })
-        
-        # 메인 프레임
-        self.main_frame = ttk.Frame(root, padding="10")
-        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        
-        # GUI 컴포넌트 초기화
-        self.create_asset_display()
-        self.create_result_display()
-        self.create_stats_display()
-        self.create_prediction_display()
-        
-        # 상태 표시 레이블
-        self.status_label = ttk.Label(self.main_frame, text="마지막 업데이트: -")
-        self.status_label.grid(row=3, column=0, columnspan=2, sticky=tk.W, padx=5, pady=5)
         
         # 데이터 초기화
         self.game_results = []
@@ -212,7 +226,7 @@ class LadderGameGUI:
         
         # 결과 표시 트리뷰
         columns = ('회차', '방향', '줄수', '홀짝', '베팅금', '순이익')
-        self.result_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=10)
+        self.result_tree = ttk.Treeview(left_frame, columns=columns, show='headings', height=15)
         
         # 컬럼 설정
         total_width = 0
@@ -242,15 +256,21 @@ class LadderGameGUI:
         log_frame = ttk.LabelFrame(left_frame, text="베팅 내역", padding="5")
         log_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=5)
         
-        # 베팅 내역 텍스트 위젯 (너비를 트리뷰와 동일하게 설정)
-        char_width = total_width // 7  # 픽셀을 문자 너비로 대략 변환 (평균 폰트 너비가 약 7픽셀이라 가정)
-        self.log_text = tk.Text(log_frame, height=8, width=char_width)
+        # 베팅 내역 텍스트 위젯 설정
+        char_width = total_width // 7
+        self.log_text = tk.Text(log_frame, height=12, width=char_width, wrap=tk.WORD)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # 베팅 내역 스크롤바
+        # 스크롤바 설정
         log_scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
         log_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
         self.log_text.configure(yscrollcommand=log_scrollbar.set)
+        
+        # 저장된 베팅 내역 불러오기
+        self.load_betting_log()
+        
+        # 자동 스크롤 설정
+        self.log_text.bind('<KeyRelease>', lambda e: self.log_text.see(tk.END))
         
         # 베팅 모드 선택 프레임 (오른쪽에 배치)
         mode_frame = ttk.LabelFrame(right_frame, text="베팅 모드", padding="5")
@@ -333,15 +353,75 @@ class LadderGameGUI:
             label.grid(row=row, column=0, sticky=tk.W, padx=5, pady=2)
             row += 1
 
+    def update_log_file(self):
+        """현재 시간에 맞는 로그 파일 경로 업데이트"""
+        current_time = datetime.now()
+        log_filename = f"betting_log_{current_time.strftime('%Y%m%d_%H')}.txt"
+        self.current_log_file = os.path.join(self.log_directory, log_filename)
+        
+        # 1시간마다 이 함수를 다시 호출
+        next_hour = (current_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        delay_ms = int((next_hour - current_time).total_seconds() * 1000)
+        self.root.after(delay_ms, self.update_log_file)
+
     def add_log(self, message):
+        """베팅 내역 로그를 추가하고 파일에 저장"""
         current_time = datetime.now().strftime("%H:%M:%S")
-        self.log_text.insert('1.0', f"[{current_time}] {message}\n")
-        self.log_text.see('1.0')
+        log_entry = f"[{current_time}] {message}\n"
+        
+        # 텍스트 위젯에 추가 (끝에 추가)
+        self.log_text.insert(tk.END, log_entry)
+        
+        # 파일에 저장
+        try:
+            with open(self.current_log_file, 'a', encoding='utf-8') as f:
+                f.write(log_entry)
+        except Exception as e:
+            logging.error(f"로그 파일 저장 중 오류 발생: {e}")
+        
+        # 스크롤을 최하단으로
+        self.log_text.see(tk.END)
+
+    def load_betting_log(self):
+        """현재 시간대의 베팅 내역 로그를 불러옴"""
+        try:
+            # 텍스트 위젯 초기화
+            self.log_text.delete('1.0', tk.END)
+            
+            # 현재 시간대의 로그 파일 불러오기
+            if os.path.exists(self.current_log_file):
+                with open(self.current_log_file, 'r', encoding='utf-8') as f:
+                    log_content = f.read()
+                    self.log_text.insert(tk.END, log_content)
+            
+            # 이전 시간대의 로그 파일도 불러오기 (최근 3시간)
+            current_time = datetime.now()
+            for i in range(1, 4):  # 이전 3시간의 로그
+                past_time = current_time - timedelta(hours=i)
+                past_log_file = os.path.join(
+                    self.log_directory,
+                    f"betting_log_{past_time.strftime('%Y%m%d_%H')}.txt"
+                )
+                if os.path.exists(past_log_file):
+                    with open(past_log_file, 'r', encoding='utf-8') as f:
+                        log_content = f.read()
+                        if log_content.strip():  # 내용이 있는 경우에만 추가
+                            self.log_text.insert('1.0', f"\n=== {past_time.strftime('%Y-%m-%d %H시')} 기록 ===\n")
+                            self.log_text.insert('1.0', log_content)
+            
+            # 스크롤을 최하단으로
+            self.log_text.see(tk.END)
+        except Exception as e:
+            logging.error(f"로그 파일 불러오기 중 오류 발생: {e}")
 
     def update_result_tree(self):
         # 기존 항목 삭제
         for item in self.result_tree.get_children():
             self.result_tree.delete(item)
+        
+        # 트리뷰 태그 설정
+        self.result_tree.tag_configure('winner', foreground='blue')
+        self.result_tree.tag_configure('loser', foreground='red')
         
         # 새 데이터 추가
         for result in self.game_results:
@@ -364,6 +444,8 @@ class LadderGameGUI:
                                 f"{total_bet:,}", f"{net_profit:,}")
                 else:
                     result = (round_num, direction, line, parity, "-", "-")
+            else:
+                result = (round_num, direction, line, parity, "-", "-")
             
             item = self.result_tree.insert('', 'end', values=result)
             
@@ -376,11 +458,9 @@ class LadderGameGUI:
                     total_bet = round_info.total_bet
                     net_profit = total_win - total_bet
                     
-                    if net_profit > 0:  # 실제 이익이 있을 때만 파란색 표시
-                        self.result_tree.tag_configure('winner', foreground='blue')
+                    if net_profit > 0:  # 이익이 있을 때는 파란색
                         self.result_tree.item(item, tags=('winner',))
-                    elif net_profit < 0:  # 손실일 때는 빨간색 표시
-                        self.result_tree.tag_configure('loser', foreground='red')
+                    elif net_profit < 0:  # 손실일 때는 빨간색
                         self.result_tree.item(item, tags=('loser',))
 
     def update_stats(self):
@@ -948,6 +1028,15 @@ class LadderGameGUI:
         finally:
             # 1초마다 업데이트
             self.root.after(1000, self.update_timer)
+
+    def on_closing(self):
+        """프로그램 종료 시 호출되는 함수"""
+        try:
+            # 프로그램 종료 로그 기록
+            self.add_log("=== 프로그램 종료 ===\n")
+        finally:
+            # 프로그램 종료
+            self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
